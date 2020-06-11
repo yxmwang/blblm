@@ -29,7 +29,7 @@ The new package named `blblm` is to fit regression models with a bag of little b
 
 The BLB is a combinied method of bootstrap with replacement and subsample. We will first map the data into s subsamples without replacement. And each subsample's size is b. Then, within each subsample, BLB will bootstrap r times into each bootstrap sample with size n.  The bootstrap statistics can be computed. After that, we can find the the statistics from the bootstrap statistics and take average of it. 
 
-Thus, we can see that BLB can improve the computationally efficiency and also make sure the quality of estimates. 
+Thus, we can see that BLB can improve the computationally efficiency and also make sure the quality of estimates. It also provides a method of pre-aggregating data before bootstrapping to reduce computational constraints.
 
 ## blblm package
 
@@ -47,13 +47,13 @@ The `blblm()` function can fit linear regression model on the data by BLB. This 
 
 * `B`, the integer indicating the number of bootstrap
 
-* `parallel`, the boolean to run the function wheter use paralleization or not. 
+* `parallel`, the boolean to run the function wheter use paralleization or not. Its default value is `FALSE`.
 
 Note that when choosing `parallel = TRUE`, the users need to have `plan(multisession, workers = 4)` to specify the number of workers they need. In this case, I chose 4 clsuters, but users can change this numer as their need. 
 
 Then, the `blblm()` will return the fitted linear regression model. The user could further find the estimators' confidence interval, standard error, prediction interval and so on. 
 
-Here is an example of the blblm()
+Here is an example of the `blblm()`
 
 ```{r}
 fit1 <- blblm(mpg ~ wt * hp, data = mtcars, m = 3, B = 100, parallel = FALSE)
@@ -75,7 +75,7 @@ predict(fit1, data.frame(wt = c(2.5, 3), hp = c(150, 170)))
 predict(fit1, data.frame(wt = c(2.5, 3), hp = c(150, 170)), confidence = TRUE)
 ```
 
-In order to show the improved efficiency by the parallezitation method, let's benchmark the blblm in one CPU and in four CPUs. You can notice that the running time when `parallel = TRUE` is much shorter. 
+In order to show the improved efficiency by the parallezitation method, let's benchmark the blblm in one CPU and in four CPUs. You can notice that the running time when running `parallel = TRUE` is almost half shorter than that of `parallel = FALSE`. 
 ```{r, paged.print = FALSE}
 suppressWarnings(plan(multiprocess, workers = 4))
 
@@ -84,19 +84,12 @@ bench::mark(blblm.par = {blblm(mpg ~ wt * hp, data = mtcars, m = 3, B = 100, par
             check = FALSE)
 ```
 
-Then, we can also benchmark the regular `lm()` with our `blblm()`. We can easily see that `blblm()` runs almost half of the time than `lm()`
-```{r, paged.print = FALSE}
-bench::mark(blblm = {blblm(mpg ~ wt * hp, data = mtcars, m = 3, B = 100, parallel = FALSE)}, 
-            lm = {lm(mpg ~ wt * hp, data = mtcars)}, 
-            check = FALSE)
-```
-
 
 ### blblog()
 
 The `blblog()` function can fit logistic regression model on the data by BLB. This will also require the users to input 4 parameters. Those are
 
-* `formula`, the formula of the linear regression
+* `formula`, the formula of the logistic regression
 
 * `data`, the data you want to fit the model
 
@@ -104,16 +97,16 @@ The `blblog()` function can fit logistic regression model on the data by BLB. Th
 
 * `B`, the integer indicating the number of bootstrap
 
-* `parallel`, the boolean to run the function wheter use paralleization or not. 
+* `parallel`, the boolean to run the function wheter use paralleization or not. Its default value is `FALSE`.
 
 Note that when choosing `parallel = TRUE`, the users need to have `plan(multisession, workers = 4)` to specify the number of workers they need. In this case, I chose 4 clsuters, but users can change this numer as their need. 
 
 Then, the `blblog()` will return the fitted logistic regression model. The user could further find the estimators' confidence interval, standard error, prediction interval and so on. 
 
-Here is an example of the blblog()
+Here is an example of the `blblog()`
 
 ```{r, warning = FALSE}
-bi <- sample(iris[1:100,], 1000, replace = TRUE)  #binomial iris
+bi <- sample(iris[1:100,], 1000, replace = TRUE)
 fit2 <- blblog(Species ~ Sepal.Width + Sepal.Length, data = bi, m = 3, B = 100, parallel = FALSE)
 coef(fit2)
 ```
@@ -145,7 +138,6 @@ blblm <- function(formula, data, m = 10, B = 5000, parallel = FALSE) {
 
 
   dir.create("files", showWarnings = FALSE)
-  set.seed(141)
   1:100 %>% walk(function(i) {
     dt <- tibble(x = rnorm(5000), y = rnorm(5000))
     write_csv(dt, file.path("files", sprintf("file%02d.csv", i)))
