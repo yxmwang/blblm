@@ -1,0 +1,169 @@
+---
+title: "blblm Package Improvements"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{my-vignette}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+
+```{r setup, message=FALSE, warning=FALSE}
+library(blblm)
+library(tidyverse)
+library(future)
+```
+
+
+The new package named `blblm` is to fit regression models with a bag of little bootstrap. 
+
+
+## Bag of Little Bootstrap
+
+The BLB is a combinied method of bootstrap with replacement and subsample. We will first map the data into s subsamples without replacement. And each subsample's size is b. Then, within each subsample, BLB will bootstrap r times into each bootstrap sample with size n.  The bootstrap statistics can be computed. After that, we can find the the statistics from the bootstrap statistics and take average of it. 
+
+Thus, we can see that BLB can improve the computationally efficiency and also make sure the quality of estimates. 
+
+## blblm package
+
+In the `blblm` package, we use the bag of little bootstrap to run two different regression models, which are linear regression, `blblm()`, and logistic regression, `blblog()`. 
+
+### blblm()
+
+The `blblm()` function can fit linear regression model on the data by BLB. This will require the users to input 4 parameters. Those are
+
+* `formula`, the formula of the linear regression
+
+* `data`, the data you want to fit the model
+
+* `m`, the integer indicating the number of subsamples
+
+* `B`, the integer indicating the number of bootstrap
+
+* `parallel`, the boolean to run the function wheter use paralleization or not. 
+
+Note that when choosing `parallel = TRUE`, the users need to have `plan(multisession, workers = 4)` to specify the number of workers they need. In this case, I chose 4 clsuters, but users can change this numer as their need. 
+
+Then, the `blblm()` will return the fitted linear regression model. The user could further find the estimators' confidence interval, standard error, prediction interval and so on. 
+
+Here is an example of the blblm()
+
+```{r}
+fit1 <- blblm(mpg ~ wt * hp, data = mtcars, m = 3, B = 100, parallel = FALSE)
+coef(fit1)
+```
+We can find the estimated coefficient for the linear regression. 
+
+Also, we can find the confidence interval (default is 95% confidence) of the estimates, the standard error, the confidence interval of standard error, and the prediction interval. 
+
+```{r}
+confint(fit1, c("wt", "hp"))
+
+sigma(fit1)
+
+sigma(fit1, confidence = TRUE)
+
+predict(fit1, data.frame(wt = c(2.5, 3), hp = c(150, 170)))
+
+predict(fit1, data.frame(wt = c(2.5, 3), hp = c(150, 170)), confidence = TRUE)
+```
+
+In order to show the improved efficiency by the parallezitation method, let's benchmark the blblm in one CPU and in four CPUs. You can notice that the running time when `parallel = TRUE` is much shorter. 
+```{r, paged.print = FALSE}
+suppressWarnings(plan(multiprocess, workers = 4))
+
+bench::mark(blblm.par = {blblm(mpg ~ wt * hp, data = mtcars, m = 3, B = 100, parallel = FALSE)}, 
+            blblm.nonpar = {blblm(mpg ~ wt * hp, data = mtcars, m = 3, B = 100, parallel = TRUE)}, 
+            check = FALSE)
+```
+
+Then, we can also benchmark the regular `lm()` with our `blblm()`. We can easily see that `blblm()` runs almost half of the time than `lm()`
+```{r, paged.print = FALSE}
+bench::mark(blblm = {blblm(mpg ~ wt * hp, data = mtcars, m = 3, B = 100, parallel = FALSE)}, 
+            lm = {lm(mpg ~ wt * hp, data = mtcars)}, 
+            check = FALSE)
+```
+
+
+### blblog()
+
+The `blblog()` function can fit logistic regression model on the data by BLB. This will also require the users to input 4 parameters. Those are
+
+* `formula`, the formula of the linear regression
+
+* `data`, the data you want to fit the model
+
+* `m`, the integer indicating the number of subsamples
+
+* `B`, the integer indicating the number of bootstrap
+
+* `parallel`, the boolean to run the function wheter use paralleization or not. 
+
+Note that when choosing `parallel = TRUE`, the users need to have `plan(multisession, workers = 4)` to specify the number of workers they need. In this case, I chose 4 clsuters, but users can change this numer as their need. 
+
+Then, the `blblog()` will return the fitted logistic regression model. The user could further find the estimators' confidence interval, standard error, prediction interval and so on. 
+
+Here is an example of the blblog()
+
+```{r, warning = FALSE}
+bi <- sample(iris[1:100,], 1000, replace = TRUE)  #binomial iris
+fit2 <- blblog(Species ~ Sepal.Width + Sepal.Length, data = bi, m = 3, B = 100, parallel = FALSE)
+coef(fit2)
+```
+We can find the estimated coefficient for the logistic regression. 
+
+In order to show the improved efficiency by the parallezitation method, let's benchmark the blblm in one CPU and in four CPUs. You can notice that the running time when `parallel = TRUE` is shorter. 
+```{r, paged.print = FALSE, warning=FALSE}
+suppressWarnings(plan(multiprocess, workers = 4))
+
+bench::mark(blblog.par = {blblog(Species ~ Sepal.Width + Sepal.Length, data = bi, m = 3, B = 100, parallel = FALSE)}, 
+            blblog.nonpar = {blblog(Species ~ Sepal.Width + Sepal.Length, data = bi, m = 3, B = 100, parallel = TRUE)}, 
+            check = FALSE)
+```
+
+
+## Conclusion
+
+Overall, to improve the efficiency of `blblm` package, I conducted two improvements. First, I added the logistic regression model so that users can fit the data into more models. Second, I added the parallelization feature for both models. Users can specify whether they want to use parallelization. Third, I tried to work on the feature which allow users to specify the list of files they want to fit the model; however, I was not getting it done to submit this project on time. I attached the code as a reference to show my work. 
+
+```{r, eval=FALSE}
+blblm <- function(formula, data, m = 10, B = 5000, parallel = FALSE) {
+  data_list <- split_data(data, m)
+
+  if (parallel == TRUE) {
+    map.func <- future_map
+  } else {
+    map.func <- map
+  }
+
+
+  dir.create("files", showWarnings = FALSE)
+  set.seed(141)
+  1:100 %>% walk(function(i) {
+    dt <- tibble(x = rnorm(5000), y = rnorm(5000))
+    write_csv(dt, file.path("files", sprintf("file%02d.csv", i)))
+  })
+
+  file_names <- file.path("files", list.files("files"))
+
+  estimates <- data_list %>% map.func(~{
+    df <- vroom(., col_types=cols())
+    lm_each_subsample(formula = formula, data = ., n = nrow(data), B = B)
+  })
+
+  # estimates <- map.func(
+  #   file_names,
+  #   ~ lm_each_subsample(formula = formula, data = ., n = nrow(data), B = B))
+  res <- list(estimates = estimates, formula = formula)
+  class(res) <- "blblm"
+  invisible(res)
+}
+```
+

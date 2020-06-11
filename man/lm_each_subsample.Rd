@@ -6,6 +6,18 @@
 \usage{
 lm_each_subsample(formula, data, n, B)
 }
+\arguments{
+\item{formula}{linear regression formula}
+
+\item{data}{data frame}
+
+\item{n}{numeric}
+
+\item{B}{numeric}
+}
+\value{
+the regression estimate in each subsample
+}
 \description{
 compute the estimates
 }
