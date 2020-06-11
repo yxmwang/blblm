@@ -1,5 +1,7 @@
 # blblm
 
+In the blblm package, there are two regression models with bag of little bootstrap. The users can also choose to run those model in one CPU or more than 1 CPUs as their need. 
+
 <!-- badges: start -->
 <!-- badges: end -->
 
